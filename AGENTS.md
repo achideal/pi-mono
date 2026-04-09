@@ -104,6 +104,17 @@ tmux kill-session -t pi-test
 - No fluff or cheerful filler text
 - Technical prose only, be kind but direct (e.g., "Thanks @user" not "Thanks so much @user!")
 
+## Tutorial Authoring
+- The learning outline in `tutorial/agent-learning-outline.md` is the canonical structure for the tutorial series in this repository.
+- When the user asks to expand the tutorial, generate content chapter by chapter following that outline in order unless the user explicitly asks to skip ahead.
+- Organize tutorial output by phase under `tutorial/step-n/`, where `n` is the phase number from the outline.
+- Store each generated chapter as `tutorial/step-n/chap-n.md`, where the chapter number matches the outline chapter number.
+- Each tutorial chapter must connect concepts to real code in this repository with concrete file references and explanations of how the implementation works.
+- Each tutorial chapter must also explain important concepts, tradeoffs, and design ideas that are not directly stated in code or comments when that context helps a beginner understand the system.
+- Keep the tutorial beginner-friendly, but do not oversimplify away the engineering details that matter for building agents.
+- When a chapter spans multiple packages, explain the package boundaries and why responsibilities are split that way.
+- Preserve this tutorial structure and these authoring rules as project-scoped instructions for future work in this repository.
+
 ## Changelog
 Location: `packages/*/CHANGELOG.md` (each package has its own)
 
