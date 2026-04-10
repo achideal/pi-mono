@@ -401,6 +401,137 @@ export type AssistantMessageEvent =
 
 在后续章节中，你会看到 `packages/agent` 如何消费这些事件来驱动 agent 循环。
 
+### 深入理解：这些事件是 LLM 原生生成的吗？
+
+读到这里你可能会有一个疑问：`AssistantMessageEvent` 中的这些结构化事件（`text_delta`、`toolcall_start`、`toolcall_end` 等）是 LLM 原生就能生成的吗？
+
+答案是：**不是**。LLM 本身确实只是"吐出一坨字符串"。这些结构化事件是 `packages/ai` 中每个 provider 实现**解析原始流之后手动构造并 push 出来的**。
+
+整个过程经历三层转换：
+
+```
+LLM 模型（神经网络）
+    ↓ 输出 token 序列（包含特殊的工具调用 token）
+供应商 API 服务层（OpenAI / Anthropic / Google）
+    ↓ 解析 token，拆分成文本块、工具调用块、思考块等，以各自格式返回
+pi-mono packages/ai（各 provider 实现）
+    ↓ 统一翻译成 8 种 AssistantMessageEvent
+上层消费者（Agent / UI）
+```
+
+以 OpenAI Chat Completions 为例（`packages/ai/src/providers/openai-completions.ts`），LLM 返回的原始数据长这样：
+
+```typescript
+// OpenAI 返回的原始 chunk（简化）
+{
+  choices: [
+    {
+      delta: {
+        content: "Hello", // 文本片段——就是一坨字符串
+        tool_calls: [
+          {
+            // 工具调用片段——也是字符串
+            id: "call_abc",
+            function: {
+              name: "read_file",
+              arguments: '{"path":', // JSON 字符串，分片到达！
+            },
+          },
+        ],
+      },
+      finish_reason: null, // 还没结束
+    },
+  ];
+}
+```
+
+然后 provider 代码**手动解析**这些原始 chunk，维护一个状态机，逐步构造出统一事件：
+
+```typescript
+// openai-completions.ts 中的实际代码（简化）
+for await (const chunk of openaiStream) {
+    const choice = chunk.choices[0];
+
+    // 原始 chunk 里有 content？→ 构造 text_delta 事件
+    if (choice.delta.content) {
+        currentBlock.text += choice.delta.content;
+        stream.push({                          // ← 手动 push！
+            type: "text_delta",
+            delta: choice.delta.content,
+            partial: output,
+        });
+    }
+
+    // 原始 chunk 里有 tool_calls？→ 构造 toolcall 系列事件
+    if (choice.delta.tool_calls) {
+        // 新工具调用开始 → push toolcall_start
+        stream.push({ type: "toolcall_start", ... });
+
+        // 参数 JSON 片段到达 → 累积并 push toolcall_delta
+        currentBlock.partialArgs += toolCall.function.arguments;
+        stream.push({ type: "toolcall_delta", delta: ..., ... });
+    }
+
+    // chunk 结束 → push toolcall_end（解析完整 JSON）
+    // 整个流结束 → push done
+}
+```
+
+每个 provider 的原始流格式完全不同，这也是为什么需要封装：
+
+| Provider               | 原始流格式                                                            | 工具调用在哪里              |
+| ---------------------- | --------------------------------------------------------------------- | --------------------------- |
+| **OpenAI Completions** | `ChatCompletionChunk`，工具在 `delta.tool_calls`                      | JSON 字符串分片             |
+| **OpenAI Responses**   | `ResponseStreamEvent`，事件类型如 `response.output_text.delta`        | 独立的 `function_call` item |
+| **Anthropic**          | `message_start` → `content_block_start` → `content_block_delta` → ... | `type: "tool_use"` 内容块   |
+| **Google Gemini**      | `GenerateContentResponse` 流，内容在 `candidates[0].content.parts`    | `functionCall` part         |
+
+每个 provider 实现文件（如 `packages/ai/src/providers/anthropic.ts`）都在做同一件事：**把各自格式的原始流，翻译成统一的 `AssistantMessageEvent` 事件序列**。
+
+### 工具调用的本质：LLM 怎么"调用工具"的？
+
+既然 LLM 只是生成字符串，它怎么"调用工具"的？
+
+答案是：**LLM 并不真的调用工具**。它只是在输出中生成了一段特殊格式的文本（比如一个 JSON），表达"我想调用这个函数"。各 provider 的 API 层会把这段文本从普通文本中分离出来，放到 `tool_calls` 字段里返回。然后 pi-mono 的 provider 代码再把它翻译成 `toolcall_start` → `toolcall_delta` → `toolcall_end` 事件。
+
+整个链条是：
+
+> **LLM 生成包含工具调用意图的 token** → **供应商 API 层解析并结构化** → **pi-mono provider 代码翻译成统一事件** → **Agent runtime 消费事件并真正执行工具**
+
+那模型是怎么学会"输出工具调用格式"的？这里有两种方式：
+
+**方式一：训练时内化（现代主流方式）**。OpenAI、Anthropic、Google 等主流供应商的模型，在**训练阶段**就已经学会了"当需要调用工具时，输出特定格式的 token"。这不是通过 prompt 注入的，而是模型权重里就包含了这个能力——供应商在训练数据中包含了大量"工具调用"场景的样本，模型学会了当上下文中有 `tools` 定义且用户问题需要调用工具时，生成符合特定格式的 token。这些 token 在供应商的 API 服务层被拦截和解析，不会作为普通文本返回给你。
+
+**方式二：Prompt 注入（早期/开源模型方式）**。早期模型或一些开源模型通过 system prompt 注入类似 `<tool_call>{"name": "read_file", ...}</tool_call>` 的格式指令，然后由外围系统用正则或解析器从输出文本中提取工具调用。
+
+总结一下各层的职责：
+
+| 层次                                | 谁负责                     | 输出什么                           |
+| ----------------------------------- | -------------------------- | ---------------------------------- |
+| LLM 模型                            | 预测下一个 token           | 一坨 token（字符串片段）           |
+| Provider API（OpenAI/Anthropic 等） | 把 token 流包装成 HTTP SSE | 各自格式的 chunk/event             |
+| pi-mono provider 实现               | 解析原始 chunk，维护状态机 | **统一的 `AssistantMessageEvent`** |
+| Agent runtime / UI                  | 消费统一事件               | 执行工具、显示文本                 |
+
+**一句话总结**：LLM 只管吐字符串，所有结构化的事件都是外围系统"翻译"出来的。`AssistantMessageEvent` 是 pi-mono 的封装层，目的是让上层代码不需要关心"我在和哪个 provider 说话"。
+
+pi-mono 的最底层基本止步于供应商的 SDK 接口，但在 SDK 无法覆盖的场景下（非标准 API 端点），它也会深入到原始 HTTP/SSE/WebSocket 层自己做解析。不过即使是这些手动解析的 provider，它们解析的也是供应商 API 返回的 JSON 事件——并不涉及 LLM 输出的原始 token 流的解析（那一层始终是供应商服务端在做的）。
+
+```
+packages/ai 的 provider 实现
+├── 大多数 provider：使用官方 SDK → SDK 已解析好结构化对象 → 翻译成 AssistantMessageEvent
+│   ├── OpenAI Completions (openai SDK)
+│   ├── OpenAI Responses (openai SDK)
+│   ├── Anthropic (@anthropic-ai/sdk)
+│   ├── Google Gemini (@google/genai)
+│   ├── Google Vertex (@google/genai)
+│   └── Amazon Bedrock (@aws-sdk)
+│
+└── 少数 provider：手动 fetch + 自己解析原始 SSE/WebSocket → 翻译成 AssistantMessageEvent
+    ├── OpenAI Codex (非标准端点，SDK 不支持)
+    └── Google Gemini CLI (Cloud Code Assist 端点，SDK 不支持)
+```
+
 ## 容易混淆的概念
 
 ### Provider vs API
@@ -469,6 +600,36 @@ pi-mono 使用一个自动生成的模型注册表（`models.generated.js`），
 
 1. **数 token**：找一段你常写的代码（10-20 行），估算它大约有多少 token。提示：英文大约 1 token ≈ 4 个字符，中文大约 1 token ≈ 1-2 个字符。
 
+   > **关键信息**：以 `packages/ai/src/stream.ts` 中的 `stream` 和 `complete` 函数（约 18 行）为例，估算约 **90-100 个 token**。代码中的符号（`<`, `>`, `(`, `)`, `:`, `{`, `}` 等）通常各占 1 个 token；关键字和标识符（`export`, `function`, `const`）各占 1 个 token；类型名如 `AssistantMessageEventStream` 可能被拆成多个 token。一段很短的代码就能消耗近百 token，这解释了为什么 agent 场景中上下文管理如此重要——system prompt + 对话历史 + 工具定义 + 文件内容很容易达到数万甚至数十万 token。
+
 2. **看模型元数据**：在 `packages/ai/src/models.ts` 中，找到 `getModel` 函数，理解它是如何从注册表中查找模型的。然后调用 `getModels('openai')` 看看 OpenAI 有哪些模型，注意它们的 `contextWindow` 和 `maxTokens` 分别是多少。
 
+   > **关键信息**：`getModel(provider, modelId)` 从自动生成的注册表 `models.generated.js`（一个 `Map<Provider, Map<ModelId, Model>>` 结构）中按 provider 和 modelId 查找模型，找不到则抛出错误。OpenAI 主要模型的参数如下：
+   >
+   > | 模型                          | contextWindow | maxTokens |
+   > | ----------------------------- | :-----------: | :-------: |
+   > | gpt-4o                        |    128,000    |  16,384   |
+   > | gpt-4o-mini                   |    128,000    |  16,384   |
+   > | o1                            |    200,000    |  100,000  |
+   > | o3 / o3-mini                  |    200,000    |  100,000  |
+   > | o4-mini                       |    200,000    |  100,000  |
+   > | gpt-4.1 / 4.1-mini / 4.1-nano |   1,047,576   |  32,768   |
+   >
+   > 注意 `contextWindow`（总容量）和 `maxTokens`（单次输出上限）差异巨大——128K 上下文的 gpt-4o 单次输出最多 16K，说明大部分空间留给输入。推理模型（o 系列）的 `maxTokens` 更大（65K-100K），因为推理过程需要更多输出空间。gpt-4.1 系列突破了百万 token 上下文窗口。
+
 3. **理解事件流**：阅读 `packages/ai/src/types.ts` 中的 `AssistantMessageEvent` 类型定义，列出所有可能的事件类型，思考每种事件在什么场景下会被触发。
+
+   > **关键信息**：`AssistantMessageEvent` 共有 **8 种事件类型**：
+   >
+   > | 事件类型         | 触发场景                        | 在 agent 系统中的作用                            |
+   > | ---------------- | ------------------------------- | ------------------------------------------------ |
+   > | `start`          | 流开始时触发一次                | 初始化 UI、准备接收数据                          |
+   > | `text_delta`     | 模型生成文本时，每个 token 触发 | 逐字显示输出，实现打字机效果                     |
+   > | `thinking_delta` | 推理模型输出思考过程时触发      | 展示模型的推理链（如 o1、Claude thinking）       |
+   > | `toolcall_start` | 模型开始请求调用工具时触发      | 通知 agent runtime 准备执行工具                  |
+   > | `toolcall_delta` | 工具调用参数流式到达时触发      | 逐步构建工具调用的参数 JSON                      |
+   > | `toolcall_end`   | 工具调用参数接收完毕时触发      | **触发工具执行**——runtime 拿到完整参数后执行工具 |
+   > | `done`           | 模型正常结束生成时触发          | 标记本轮结束，进入下一步（执行工具/返回用户）    |
+   > | `error`          | 生成过程中出错时触发            | 错误处理——重试、降级或通知用户                   |
+   >
+   > 这些事件构成了 agent 循环的感知层：UI 层消费 `text_delta` 实时展示；agent runtime 监听 `toolcall_end` 触发工具执行并把结果放回上下文形成循环；控制层监听 `done` 的 `reason` 判断是主动结束还是被截断。模型的输出不是简单字符串，而是**结构化事件流**，这是构建响应式 agent 的基础。
