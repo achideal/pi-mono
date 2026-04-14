@@ -546,6 +546,102 @@ export function adjustMaxTokensForThinking(
 
 这让 agent 层可以用统一的方式控制推理强度，而不需要知道每个 provider 的具体参数名。
 
+## 四个函数的完整关系与实际使用分布
+
+上一节只对比了 `stream` 和 `streamSimple`，但 `stream.ts` 实际上导出了**四个**函数。它们的关系可以用一张图表示：
+
+```
+                    Provider 特有选项              统一选项
+                  ┌─────────────────────┐   ┌─────────────────────┐
+  流式（返回流）  │  stream()           │   │  streamSimple()     │
+                  │  → provider.stream  │   │  → provider.        │
+                  │                     │   │    streamSimple      │
+                  ├─────────────────────┤   ├─────────────────────┤
+  非流式（返回    │  complete()         │   │  completeSimple()   │
+  最终结果）      │  = stream().result()│   │  = streamSimple()   │
+                  │                     │   │    .result()         │
+                  └─────────────────────┘   └─────────────────────┘
+```
+
+`complete` 和 `completeSimple` 并不是独立的实现——它们只是对应流式函数的便捷封装，启动流然后等待最终结果：
+
+```typescript
+// packages/ai/src/stream.ts
+export async function complete<TApi extends Api>(
+  model: Model<TApi>,
+  context: Context,
+  options?: ProviderStreamOptions,
+): Promise<AssistantMessage> {
+  const s = stream(model, context, options);
+  return s.result();
+}
+
+export async function completeSimple<TApi extends Api>(
+  model: Model<TApi>,
+  context: Context,
+  options?: SimpleStreamOptions,
+): Promise<AssistantMessage> {
+  const s = streamSimple(model, context, options);
+  return s.result();
+}
+```
+
+### 谁在用哪个函数？
+
+一个自然的问题是：这四个函数在项目中分别被谁使用？答案揭示了一个清晰的分工模式：
+
+**`streamSimple` —— 核心主力，驱动 agent 循环**
+
+`packages/agent` 的 `agent-loop.ts` 直接导入并使用 `streamSimple`。这是整个系统中最关键的调用路径——每一轮 agent 循环都通过它与 LLM 通信：
+
+```typescript
+// packages/agent/src/agent-loop.ts
+import { streamSimple } from "@mariozechner/pi-ai";
+```
+
+`packages/agent` 还将 `streamSimple` 的签名定义为标准的 `StreamFn` 类型，所有 agent 实例都通过这个类型约束来调用模型：
+
+```typescript
+// packages/agent/src/types.ts
+export type StreamFn = (
+  ...args: Parameters<typeof streamSimple>
+) => ReturnType<typeof streamSimple> | Promise<ReturnType<typeof streamSimple>>;
+```
+
+**`completeSimple` —— 后台任务，用于压缩和摘要**
+
+当会话变得很长，需要压缩历史上下文时，`packages/coding-agent` 的压缩模块使用 `completeSimple`：
+
+```typescript
+// packages/coding-agent/src/core/compaction/compaction.ts
+import { completeSimple } from "@mariozechner/pi-ai";
+
+// 生成历史摘要时，不需要流式输出，只需要最终结果
+const response = await completeSimple(model, context, { reasoning: "medium" });
+```
+
+分支摘要（`branch-summarization.ts`）也使用 `completeSimple`。这些场景的共同特点是：**不需要实时展示生成过程，只需要最终的摘要文本**。用 `completeSimple` 比手动消费流更简洁。
+
+**`complete`（底层版本）—— 示例代码和轻量级工具场景**
+
+底层的 `complete` 主要出现在两个地方：
+
+1. **示例代码和文档**：`packages/ai/README.md` 中大量使用 `complete` 作为教学示例，因为它比流式调用更容易理解
+2. **Web UI 的 API key 验证**：`ProviderKeyInput.ts` 用 `complete` 发送一条简单的测试消息来验证 key 是否有效——这里需要传入 provider 特有的选项（如 `apiKey`），所以用底层版本而非 `completeSimple`
+
+**`stream`（底层版本）—— 几乎不在核心代码中使用**
+
+底层的 `stream` 在核心产品代码中几乎没有直接使用。它的存在主要是为了：
+
+- 提供完整的 API 表面（有 `complete` 就应该有 `stream`）
+- 让需要 provider 特有流式选项的高级用户有出口
+
+### 为什么 agent 循环选择 streamSimple 而非 stream
+
+这不是偶然的。agent 循环需要支持**运行时切换模型**——用户可能在对话中途从 Claude 切换到 GPT-4o。如果 agent 循环使用底层的 `stream`，就需要根据当前模型的 provider 构造不同的选项对象。而 `streamSimple` 的统一选项（如 `reasoning: "medium"`）让 agent 循环完全不需要关心底层是哪个 provider。
+
+这也解释了为什么 `StreamFn` 的类型签名是基于 `streamSimple` 而非 `stream`——agent 层的设计哲学就是**不感知 provider 差异**。
+
 ## API Key 解析：又一个被统一的差异
 
 不同 provider 的 API key 来源也各不相同。pi-mono 通过 `getEnvApiKey` 函数统一处理：
