@@ -265,8 +265,7 @@ async function runLoop(
 - **内层循环**：处理一轮对话中的工具调用。模型可能一次请求多个工具调用，执行完后再次调用模型，模型可能又请求新的工具调用，如此反复。
 - **外层循环**：处理 follow-up messages。当内层循环结束（模型不再请求工具调用），检查是否有后续消息需要处理。如果有，注入消息后重新进入内层循环。
 
-这个双层循环结构是 pi-mono agent 的核心控制流。后续章节会详细讨论 steering 和 follow-up 的机制。
-
+这个双层循环结构是 pi-mono agent 的核心控制流。后续章节会详细讨论 steering 和 follow-up 的机制。可以先读一份补充说明：[《补充：从使用者视角理解 Agent Loop》](./chap-2-agent-loop-faq.md)。
 ### 3. 工具（Tools）
 
 工具是 agent 与外部世界交互的接口。没有工具，agent 就只是一个会循环的聊天助手。
