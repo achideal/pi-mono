@@ -553,6 +553,110 @@ else {
 
 “现在没数据，那我先暂停，等生产者以后来叫醒我。”
 
+### 10.3 一定要分清两种不同的 `done`
+
+很多人第一次看到这里会困惑：
+
+```ts
+const result = await new Promise<IteratorResult<T>>((resolve) => this.waiting.push(resolve));
+if (result.done) return;
+yield result.value;
+```
+
+疑问通常是：
+
+“消费者不是还等着最后一个 `done` 事件吗？为什么这里一看到 `done` 就直接 `return` 了？”
+
+关键是：这里其实有两种完全不同的 “done”。
+
+#### 第一种：业务事件里的 `done`
+
+也就是：
+
+```ts
+{ type: "done", reason: "stop", message: ... }
+```
+
+这是一条真正的流内事件。
+
+它和 `text_delta`、`thinking_delta` 一样，都是消费者会收到的业务数据，只不过它表示：
+
+- 这是最后一个业务事件
+- 它里面还带着最终完整 `message`
+
+#### 第二种：`IteratorResult.done === true`
+
+也就是异步迭代器协议里的：
+
+```ts
+{ value: undefined, done: true }
+```
+
+这不是一条业务事件。
+
+它的意思只是：
+
+- 迭代结束了
+- 后面已经没有下一条事件可读了
+
+`for await ... of` 遇到这种结果时，不会把它当作事件交给你处理，而是直接结束循环。
+
+#### 两者在时间线上是怎样发生的
+
+假设消费者此时正卡在：
+
+```ts
+const result = await new Promise<IteratorResult<T>>((resolve) => this.waiting.push(resolve));
+```
+
+然后生产者推来最后一条业务事件：
+
+```ts
+stream.push({ type: "done", reason: "stop", message: output });
+```
+
+`push()` 会先把流标记成结束，并完成最终结果 Promise，但它仍然会把这条业务事件正常递给等待中的消费者：
+
+```ts
+waiter({ value: event, done: false });
+```
+
+注意这里是 `done: false`，因为这仍然是一条要交付给消费者的事件。
+
+所以消费者醒来以后，拿到的是：
+
+```ts
+{ value: doneEvent, done: false }
+```
+
+于是不会直接 `return`，而是会继续：
+
+```ts
+yield result.value;
+```
+
+也就是说，消费者确实会收到最后那条 `type: "done"` 事件。
+
+只有当消费者下一次继续取值时，异步迭代器才会发现：
+
+- `this.done === true`
+- 队列里也没有新事件了
+
+这时才会真正结束迭代。
+
+所以可以把这两个阶段记成：
+
+1. 先收到最后一条业务事件：`event.type === "done"`
+2. 再收到“没有下一条了”的协议结束信号：`IteratorResult.done === true`
+
+因此，这里的：
+
+```ts
+if (result.done) return;
+```
+
+拦截的不是最后一条业务事件，而是“流已经彻底没有下一条了”这个迭代器层信号。
+
 ---
 
 ## 11. `end(result?)` 是什么作用
@@ -594,6 +698,47 @@ waiter({ value: undefined as any, done: true });
 这就避免了一个问题：
 
 如果消费者正卡在 `await new Promise(...)` 上，而你不主动唤醒它，它可能会永远等下去。
+
+### 11.3 为什么看起来有时即使不调 `end()` 也能工作
+
+在单消费者场景里，很多人会继续追问：
+
+“既然 `push(doneEvent)` 已经把最后一个 `done` 事件交给消费者了，那是不是其实不需要 `end()`？”
+
+答案是：
+
+- **对某些单消费者路径来说，看起来确实可以跑通**
+- **但从这个通用抽象的设计上说，`end()` 仍然有明确作用**
+
+#### 为什么单消费者里看起来像是可以不调
+
+因为 `push(doneEvent)` 里本身就会先做这件事：
+
+```ts
+if (this.isComplete(event)) {
+  this.done = true;
+  this.resolveFinalResult(this.extractResult(event));
+}
+```
+
+也就是说，最后一个 `done` / `error` 事件一进入流，`this.done` 就已经变成 `true` 了。
+
+于是单个消费者收到这条最后事件以后，下一轮再进异步迭代器时，只要队列也空了，就会自然退出。
+
+#### 那为什么还要有 `end()`
+
+因为 `end()` 负责的是“彻底关流”和“收尾所有等待者”，它至少还有这几个用途：
+
+1. 唤醒所有已经挂起在 `waiting` 里的读取者，给它们一个真正的迭代结束信号
+2. 支持 `end(result)` 这种“直接结束流并给出最终结果”的路径
+3. 让“最后一个业务事件”和“迭代器关闭”这两件事在语义上清晰分离
+
+所以更准确的理解是：
+
+- `push(doneEvent)` / `push(errorEvent)`：发出最后一个业务事件
+- `end()`：把流本身彻底关闭
+
+在这个项目的大多数 provider 里，这两步通常都会做。
 
 ---
 
