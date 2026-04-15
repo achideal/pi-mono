@@ -20,6 +20,7 @@ export type ApiStreamSimpleFunction = (
 	options?: SimpleStreamOptions,
 ) => AssistantMessageEventStream;
 
+// 注册阶段的静态约束，保证api属性、stream/streamSimple方法的第一个参数model的api属性三者在类型上统一
 export interface ApiProvider<TApi extends Api = Api, TOptions extends StreamOptions = StreamOptions> {
 	api: TApi;
 	stream: StreamFunction<TApi, TOptions>;
