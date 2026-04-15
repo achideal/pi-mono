@@ -14,22 +14,22 @@
 
 ## 1. 先给一句最短总结
 
-`AssistantMessageEventStream` 本质上是一个“支持异步等待的事件队列”。
+`AssistantMessageEventStream` 本质上是一个"支持异步等待的事件队列"。
 
 它解决的问题是：
 
-1. 上游大模型会不断产生事件，比如“开始了”“吐出一点文本”“吐出一点 thinking”“开始 tool call”“结束了”
+1. 上游大模型会不断产生事件，比如"开始了""吐出一点文本""吐出一点 thinking""开始 tool call""结束了"
 2. 下游调用方希望一边收到这些事件，一边更新界面或状态
 3. 上下游速度不一定一致，所以中间需要一个对象负责协调
 
 这个负责协调的对象就是 `EventStream` / `AssistantMessageEventStream`。
 
-你可以把它理解成一个“中间水管”或者“消息中转站”：
+你可以把它理解成一个"中间水管"或者"消息中转站"：
 
 - 上游往里面塞事件
 - 下游从里面取事件
 - 如果事件先到了，就先存着
-- 如果下游先来等，就把“唤醒它的方法”先记下来
+- 如果下游先来等，就把"唤醒它的方法"先记下来
 - 一旦新事件到了，就立刻把等待中的下游叫醒
 
 ---
@@ -47,7 +47,7 @@
 - 存放事件
 - 允许异步逐个读取事件
 - 在没有事件时让读取方等待
-- 在结束时交出一个“最终结果”
+- 在结束时交出一个"最终结果"
 
 这里的泛型含义是：
 
@@ -91,7 +91,7 @@ export class AssistantMessageEventStream extends EventStream<AssistantMessageEve
 
 - 指定流里的事件类型是 `AssistantMessageEvent`
 - 指定最终结果类型是 `AssistantMessage`
-- 告诉父类：哪些事件算“流结束”
+- 告诉父类：哪些事件算"流结束"
 - 告诉父类：结束时最终结果应该从哪里拿
 
 ---
@@ -113,7 +113,7 @@ export class AssistantMessageEventStream extends EventStream<AssistantMessageEve
 - `done`
 - `error`
 
-这说明这个流里流动的不是“纯字符串”，而是结构化事件。
+这说明这个流里流动的不是"纯字符串"，而是结构化事件。
 
 也就是说，下游看到的不是简单的：
 
@@ -133,7 +133,7 @@ export class AssistantMessageEventStream extends EventStream<AssistantMessageEve
 { type: "done", reason: "stop", message: ... }
 ```
 
-为什么要这么复杂？因为 LLM 的输出不只是“纯文本”。它可能包含：
+为什么要这么复杂？因为 LLM 的输出不只是"纯文本"。它可能包含：
 
 - 普通文本
 - thinking / reasoning
@@ -141,7 +141,7 @@ export class AssistantMessageEventStream extends EventStream<AssistantMessageEve
 - 最终完整消息
 - 错误结束信息
 
-所以这里定义的是一套“事件协议”，而不是一个简单字符串流。
+所以这里定义的是一套"事件协议"，而不是一个简单字符串流。
 
 ---
 
@@ -161,7 +161,7 @@ private resolveFinalResult!: (result: R) => void;
 
 ### 4.1 `queue`
 
-这是“已经到达、但还没人拿走的事件列表”。
+这是"已经到达、但还没人拿走的事件列表"。
 
 你可以把它理解成一个篮子：
 
@@ -173,9 +173,9 @@ private resolveFinalResult!: (result: R) => void;
 
 ### 4.2 `waiting`
 
-这是“正在等待下一个事件的人”的列表。
+这是"正在等待下一个事件的人"的列表。
 
-但是它存的不是“人”，而是“叫醒这个人的函数”。
+但是它存的不是"人"，而是"叫醒这个人的函数"。
 
 这一点非常关键。`waiting` 里放的函数，其实就是 Promise 的 `resolve` 函数。这个函数不是业务层手写传进来的，而是 JavaScript 在执行 `new Promise(...)` 时自动给的。
 
@@ -188,7 +188,7 @@ private resolveFinalResult!: (result: R) => void;
 
 ### 4.4 `finalResultPromise`
 
-这是一个“最终结果 Promise”。
+这是一个"最终结果 Promise"。
 
 流式事件是一回事，但很多时候上层还想在结束后一次性拿到完整的最终结果。于是这个类额外维护一个 Promise：
 
@@ -197,7 +197,7 @@ private resolveFinalResult!: (result: R) => void;
 
 ### 4.5 `resolveFinalResult`
 
-这是用来“手动完成最终结果 Promise”的函数。
+这是用来"手动完成最终结果 Promise"的函数。
 
 它会在构造函数里被赋值，流结束时调用。
 
@@ -218,7 +218,7 @@ constructor(
 
 答案是：因为 `EventStream` 是通用的，它不应该知道你的业务规则。
 
-它只负责“机制”，不负责“业务语义”。
+它只负责"机制"，不负责"业务语义"。
 
 ### 5.1 第一个函数：`isComplete`
 
@@ -230,7 +230,7 @@ constructor(
 
 意思是：
 
-“给我一个事件，你告诉我它是不是结束事件。”
+"给我一个事件，你告诉我它是不是结束事件。"
 
 对 `AssistantMessageEventStream` 来说，规则是：
 
@@ -254,7 +254,7 @@ constructor(
 
 意思是：
 
-“既然这是结束事件，那最终结果应该从这个事件的哪里取出来？”
+"既然这是结束事件，那最终结果应该从这个事件的哪里取出来？"
 
 在 `AssistantMessageEventStream` 里：
 
@@ -278,7 +278,7 @@ constructor(
 
 因为父类只想做一件事：
 
-“当我发现一个事件满足 `isComplete(event)` 时，我就知道流该结束了，并且我应该通过 `extractResult(event)` 得到最终结果。”
+"当我发现一个事件满足 `isComplete(event)` 时，我就知道流该结束了，并且我应该通过 `extractResult(event)` 得到最终结果。"
 
 于是父类可以通用，而子类只负责提供规则。
 
@@ -302,11 +302,11 @@ this.finalResultPromise = new Promise((resolve) => {
 
 你可以把它理解成：
 
-“当未来某个时刻时机成熟时，调用这个函数，就代表这个 Promise 完成了。”
+"当未来某个时刻时机成熟时，调用这个函数，就代表这个 Promise 完成了。"
 
 ### 6.2 这里为什么要把 `resolve` 存起来
 
-因为“最终结果什么时候出来”，不是构造函数现在就知道的，而是以后流走到 `done` / `error` 才知道。
+因为"最终结果什么时候出来"，不是构造函数现在就知道的，而是以后流走到 `done` / `error` 才知道。
 
 所以这里做的事是：
 
@@ -314,7 +314,7 @@ this.finalResultPromise = new Promise((resolve) => {
 - 把它的 `resolve` 存进 `this.resolveFinalResult`
 - 等将来流结束时再调用
 
-这就是一种典型的“先创建承诺，稍后兑现”的写法。
+这就是一种典型的"先创建承诺，稍后兑现"的写法。
 
 ---
 
@@ -388,8 +388,8 @@ if (waiter) {
 
 这就保证了两种情况都能正常处理：
 
-- “消费者先等，事件后到”
-- “事件先到，消费者后取”
+- "消费者先等，事件后到"
+- "事件先到，消费者后取"
 
 ---
 
@@ -432,14 +432,14 @@ wakeUp!("hello");
 
 所以：
 
-- `resolve` = “以后拿来叫醒等待者的函数”
-- `waiting.push(resolve)` = “把这个叫醒按钮存起来”
+- `resolve` = "以后拿来叫醒等待者的函数"
+- `waiting.push(resolve)` = "把这个叫醒按钮存起来"
 
 ### 8.2 放到 `EventStream` 里理解
 
 在 `EventStream` 里，这句话的意思是：
 
-“现在没有数据可给消费者，那消费者先别继续往下走。我创建一个 Promise，把它的 `resolve` 记到 `waiting` 里。以后谁拿到新事件，谁就调用这个 `resolve` 把消费者叫醒。”
+"现在没有数据可给消费者，那消费者先别继续往下走。我创建一个 Promise，把它的 `resolve` 记到 `waiting` 里。以后谁拿到新事件，谁就调用这个 `resolve` 把消费者叫醒。"
 
 这就是为什么 `waiting` 里存的是函数。
 
@@ -465,7 +465,7 @@ Promise 构造器会把 `resolve` 作为参数传给回调。
 
 ### 9.3 把这个 `resolve` 存进 `waiting`
 
-于是 `waiting` 里记录了：“有一个消费者正在等，未来拿这个函数去叫醒它。”
+于是 `waiting` 里记录了："有一个消费者正在等，未来拿这个函数去叫醒它。"
 
 ### 9.4 `await` 让当前异步迭代暂停
 
@@ -473,7 +473,7 @@ Promise 构造器会把 `resolve` 作为参数传给回调。
 
 也就是说，这一整句的真实含义是：
 
-“现在没数据，先睡着，等以后有人把新事件送来。”
+"现在没数据，先睡着，等以后有人把新事件送来。"
 
 ---
 
@@ -511,7 +511,7 @@ async *[Symbol.asyncIterator](): AsyncIterator<T> {
 
 你可以把它理解成：
 
-“这个对象会在未来不断吐值，每次吐一个，不够时可以等。”
+"这个对象会在未来不断吐值，每次吐一个，不够时可以等。"
 
 ### 10.2 这里面有三种情况
 
@@ -525,7 +525,7 @@ if (this.queue.length > 0) {
 
 意思是：
 
-“事件已经准备好了，直接吐一个给消费者。”
+"事件已经准备好了，直接吐一个给消费者。"
 
 #### 情况 B：流已经结束
 
@@ -537,7 +537,7 @@ else if (this.done) {
 
 意思是：
 
-“不会再有新事件了，结束异步迭代。”
+"不会再有新事件了，结束异步迭代。"
 
 #### 情况 C：目前没事件，但未来可能会有
 
@@ -551,7 +551,7 @@ else {
 
 意思是：
 
-“现在没数据，那我先暂停，等生产者以后来叫醒我。”
+"现在没数据，那我先暂停，等生产者以后来叫醒我。"
 
 ### 10.3 一定要分清两种不同的 `done`
 
@@ -565,9 +565,9 @@ yield result.value;
 
 疑问通常是：
 
-“消费者不是还等着最后一个 `done` 事件吗？为什么这里一看到 `done` 就直接 `return` 了？”
+"消费者不是还等着最后一个 `done` 事件吗？为什么这里一看到 `done` 就直接 `return` 了？"
 
-关键是：这里其实有两种完全不同的 “done”。
+关键是：这里其实有两种完全不同的 "done"。
 
 #### 第一种：业务事件里的 `done`
 
@@ -647,7 +647,7 @@ yield result.value;
 所以可以把这两个阶段记成：
 
 1. 先收到最后一条业务事件：`event.type === "done"`
-2. 再收到“没有下一条了”的协议结束信号：`IteratorResult.done === true`
+2. 再收到"没有下一条了"的协议结束信号：`IteratorResult.done === true`
 
 因此，这里的：
 
@@ -655,7 +655,7 @@ yield result.value;
 if (result.done) return;
 ```
 
-拦截的不是最后一条业务事件，而是“流已经彻底没有下一条了”这个迭代器层信号。
+拦截的不是最后一条业务事件，而是"流已经彻底没有下一条了"这个迭代器层信号。
 
 ---
 
@@ -678,8 +678,8 @@ end(result?: R): void {
 
 ### 11.1 它和 `push(doneEvent)` 不是完全一回事
 
-- `push(doneEvent)` 表示“一个真正的结束事件到来了，这个事件也要作为流的一部分传出去”
-- `end()` 表示“流现在彻底关门，别再让等待者一直挂着了”
+- `push(doneEvent)` 表示"一个真正的结束事件到来了，这个事件也要作为流的一部分传出去"
+- `end()` 表示"流现在彻底关门，别再让等待者一直挂着了"
 
 ### 11.2 `end()` 的两个作用
 
@@ -689,7 +689,7 @@ end(result?: R): void {
 this.done = true;
 ```
 
-#### 作用 2：把所有等待中的消费者叫醒，并告诉它们“结束了”
+#### 作用 2：把所有等待中的消费者叫醒，并告诉它们"结束了"
 
 ```ts
 waiter({ value: undefined as any, done: true });
@@ -703,7 +703,7 @@ waiter({ value: undefined as any, done: true });
 
 在单消费者场景里，很多人会继续追问：
 
-“既然 `push(doneEvent)` 已经把最后一个 `done` 事件交给消费者了，那是不是其实不需要 `end()`？”
+"既然 `push(doneEvent)` 已经把最后一个 `done` 事件交给消费者了，那是不是其实不需要 `end()`？"
 
 答案是：
 
@@ -727,11 +727,11 @@ if (this.isComplete(event)) {
 
 #### 那为什么还要有 `end()`
 
-因为 `end()` 负责的是“彻底关流”和“收尾所有等待者”，它至少还有这几个用途：
+因为 `end()` 负责的是"彻底关流"和"收尾所有等待者"，它至少还有这几个用途：
 
 1. 唤醒所有已经挂起在 `waiting` 里的读取者，给它们一个真正的迭代结束信号
-2. 支持 `end(result)` 这种“直接结束流并给出最终结果”的路径
-3. 让“最后一个业务事件”和“迭代器关闭”这两件事在语义上清晰分离
+2. 支持 `end(result)` 这种"直接结束流并给出最终结果"的路径
+3. 让"最后一个业务事件"和"迭代器关闭"这两件事在语义上清晰分离
 
 所以更准确的理解是：
 
@@ -754,8 +754,8 @@ result(): Promise<R> {
 
 这个方法的意义是：
 
-- `for await` 用来看“过程”
-- `result()` 用来看“最终完整结果”
+- `for await` 用来看"过程"
+- `result()` 用来看"最终完整结果"
 
 这两条通道关注点不同：
 
@@ -775,7 +775,7 @@ result(): Promise<R> {
 
 这种模式是最常见、最自然的。
 
-### 13.2 但还经常会有一个“最终结果消费者”
+### 13.2 但还经常会有一个"最终结果消费者"
 
 也就是：
 
@@ -795,14 +795,14 @@ await response.result()
 
 ### 13.3 理论上能不能有多个 `for await` 消费者
 
-理论上你可以这么写，但这个类并不是“广播给每个消费者一份副本”。
+理论上你可以这么写，但这个类并不是"广播给每个消费者一份副本"。
 
 它内部只有一份共享的：
 
 - `queue`
 - `waiting`
 
-所以如果两个地方同时 `for await` 同一个流，它们会“抢同一个事件队列”，而不是各自都收到完整一套事件。
+所以如果两个地方同时 `for await` 同一个流，它们会"抢同一个事件队列"，而不是各自都收到完整一套事件。
 
 因此从设计意图上说：
 
@@ -915,14 +915,14 @@ for await (const event of response) {
 
 你可以看到这里的模式非常清楚：
 
-- `for await`：处理“中间过程”
-- `result()`：拿“最终交卷结果”
+- `for await`：处理"中间过程"
+- `result()`：拿"最终交卷结果"
 
 ---
 
 ## 16. 把完整协作流程按时间线走一遍
 
-假设模型最终回答“你好”。
+假设模型最终回答"你好"。
 
 ### 第 1 步：provider 创建流对象
 
@@ -955,7 +955,7 @@ await new Promise((resolve) => this.waiting.push(resolve))
 
 - 当前没有事件
 - 那消费者先暂停
-- 并把“未来叫醒它的函数”放进 `waiting`
+- 并把"未来叫醒它的函数"放进 `waiting`
 
 这时状态可以想象为：
 
@@ -987,13 +987,13 @@ waiter({ value: event, done: false })
 
 这对应的效果是：
 
-“assistant 开始说话了。”
+"assistant 开始说话了。"
 
 ### 第 5 步：消费者继续等待下一条事件
 
 下一轮循环开始，如果还没有新事件，它又会再次进入等待状态，再把新的 `resolve2` 存到 `waiting`。
 
-### 第 6 步：生产者收到第一个文本增量“你”
+### 第 6 步：生产者收到第一个文本增量"你"
 
 provider 解析到 LLM 的一个 chunk，于是：
 
@@ -1008,13 +1008,13 @@ stream.push({
 
 此时因为有等待者，所以这个事件会被直接递给消费者。
 
-消费者收到后更新界面，界面上开始出现“你”。
+消费者收到后更新界面，界面上开始出现"你"。
 
-### 第 7 步：生产者收到第二个文本增量“好”
+### 第 7 步：生产者收到第二个文本增量"好"
 
 同理再推一次 `text_delta`。
 
-消费者再次收到，界面变成“你好”。
+消费者再次收到，界面变成"你好"。
 
 ### 第 8 步：生产者发出 `done`
 
@@ -1075,7 +1075,7 @@ stream.end();
 - **消费者先等**：把 `resolve` 放进 `waiting`
 - **事件后到时**：直接从 `waiting` 里取出等待者并唤醒
 
-这是一个经典的“生产者-消费者协调结构”。
+这是一个经典的"生产者-消费者协调结构"。
 
 ---
 
@@ -1091,7 +1091,7 @@ for await (const event of response) {
 }
 ```
 
-这是“逐个吃事件”，关注过程。
+这是"逐个吃事件"，关注过程。
 
 ### 18.2 最终结果消费
 
@@ -1099,7 +1099,7 @@ for await (const event of response) {
 await response.result()
 ```
 
-这是“等最终完整消息”，关注终点。
+这是"等最终完整消息"，关注终点。
 
 ### 18.3 两者可以同时存在
 
@@ -1142,9 +1142,9 @@ await response.result()
 
 1. `EventStream` 是一个支持异步等待的事件队列。
 2. `AssistantMessageEventStream` 是它在 AI 消息场景下的具体版本。
-3. `queue` 用来存“已经来了但还没被消费的事件”。
-4. `waiting` 用来存“正在等事件的消费者对应的 Promise resolve”。
-5. `await new Promise((resolve) => this.waiting.push(resolve))` 的意思是：“现在没数据，先睡着，等未来有人叫醒我。”
+3. `queue` 用来存"已经来了但还没被消费的事件"。
+4. `waiting` 用来存"正在等事件的消费者对应的 Promise resolve"。
+5. `await new Promise((resolve) => this.waiting.push(resolve))` 的意思是："现在没数据，先睡着，等未来有人叫醒我。"
 6. provider 是生产者，负责 `stream.push(...)`；`agent-loop` 是事件消费者，负责 `for await ... of stream`。
 7. `result()` 是另一条通道，用来在流结束后一次性拿最终完整消息。
 
@@ -1154,10 +1154,246 @@ await response.result()
 
 `AssistantMessageEventStream` 并不神秘。它做的事情本质上是：
 
-- 用 `queue` 处理“事件先到”的情况
-- 用 `waiting` 处理“消费者先等”的情况
+- 用 `queue` 处理"事件先到"的情况
+- 用 `waiting` 处理"消费者先等"的情况
 - 用异步迭代器把这些事件一个个吐给下游
 - 用 `result()` 提供最终完整结果
-- 用 `done/error` 事件把“流式过程”和“最终交卷”连接起来
+- 用 `done/error` 事件把"流式过程"和"最终交卷"连接起来
 
-如果把这个类看成“一个能让上下游在不同速度下也能顺利协作的中间队列”，它的整体设计就会非常清楚。
+如果把这个类看成"一个能让上下游在不同速度下也能顺利协作的中间队列"，它的整体设计就会非常清楚。
+
+---
+
+## 22. 异步迭代器语法详解
+
+这一章集中解答关于 `async *`、`yield`、`next()`、`for await...of`、`while (true)` 的常见疑惑。
+
+### 22.1 `async *` 是什么
+
+`async *` 表示"异步生成器函数"（async generator function）。它同时具备两种能力：
+
+- **`async`**：内部可以 `await`
+- **`*`**：内部可以 `yield` 多个值，而不是只 `return` 一个值
+
+所以它不是"算完一次就结束"的普通函数，而是"可以暂停 / 恢复 / 连续吐值"的函数。
+
+### 22.2 `[Symbol.asyncIterator]` 是什么
+
+这是 JS 规定的"接口入口"。当你写：
+
+```ts
+for await (const item of stream) {
+  // ...
+}
+```
+
+JS 底层会这样做：
+
+1. 找到 `stream[Symbol.asyncIterator]`
+2. 调用它，拿到一个异步迭代器对象
+3. 不断调用这个迭代器的 `next()` 方法
+4. 每次 `await next()` 的结果
+5. 直到返回 `{ done: true }` 为止
+
+### 22.3 `next()` 是什么
+
+`next()` 是异步迭代器的核心方法，由消费端（或 `for await...of`）调用。
+
+它的返回值是：
+
+```ts
+Promise<{ value: T; done: boolean }>
+```
+
+- 还有值时：`{ value: 某个事件, done: false }`
+- 结束时：`{ value: undefined, done: true }`
+
+### 22.4 为什么这段代码里没有写 `next()`
+
+因为这段代码是在**定义**迭代器（生产端），不是在**使用**迭代器（消费端）。
+
+`next()` 是由 JS 引擎或调用方自动调用的，不需要在生成器函数内部手动调自己。关系如下：
+
+- 外面：`next()` 在拉数据
+- 里面：`yield` 在回数据
+
+当你用 `async *` 语法定义生成器时，JS 会自动帮你把它包装成一个带 `next()` 方法的迭代器对象。你只需要在里面写 `yield`，JS 就知道每次 `next()` 应该返回什么。
+
+### 22.5 `yield` 是什么
+
+`yield` 可以理解为：
+
+> "先把一个值交出去，然后暂停在这里；下次再被 `next()` 调用时，从这里继续往下执行。"
+
+例如：
+
+```ts
+async function* gen() {
+  yield 1;
+  yield 2;
+  return;
+}
+```
+
+外面这样调：
+
+```ts
+const it = gen();
+
+await it.next(); // { value: 1, done: false }
+await it.next(); // { value: 2, done: false }
+await it.next(); // { value: undefined, done: true }
+```
+
+所以 `yield` 和 `return` 的区别是：
+
+- **`yield x`**：返回一个中间值，函数暂停但**还没结束** → `{ value: x, done: false }`
+- **`return x`**：返回最终值，函数**结束** → `{ value: x, done: true }`
+
+### 22.6 每次 `next()` 的执行范围
+
+**每次调用 `next()`，函数都会从"上一次暂停的位置"继续执行，直到遇到下一个 `yield`、`return` 或异常，然后再次暂停。**
+
+用一个详细例子说明：
+
+```js
+function* gen() {
+  console.log("A");
+  yield 1;
+  console.log("B");
+  yield 2;
+  console.log("C");
+  return 3;
+}
+
+const it = gen();
+
+it.next();
+// 执行：进入函数 → 打印 "A" → 遇到 yield 1 → 暂停
+// 返回：{ value: 1, done: false }
+
+it.next();
+// 执行：从 yield 1 之后继续 → 打印 "B" → 遇到 yield 2 → 暂停
+// 返回：{ value: 2, done: false }
+
+it.next();
+// 执行：从 yield 2 之后继续 → 打印 "C" → 遇到 return 3 → 结束
+// 返回：{ value: 3, done: true }
+```
+
+注意：不是"从 `yield` 这一行重新执行"，而是"从 `yield` 表达式执行完之后的位置接着往下跑"。
+
+异步生成器也是一样，只是中间还可以 `await`。
+
+### 22.7 `for await...of` 是 `next()` 的语法糖
+
+**`for await...of` 本质上就是对异步迭代器 `next()` 循环调用的语法糖。**
+
+你写：
+
+```ts
+for await (const x of stream) {
+  console.log(x);
+}
+```
+
+JS 底层大致相当于：
+
+```ts
+const it = stream[Symbol.asyncIterator]();
+
+while (true) {
+  const { value, done } = await it.next();
+  if (done) break;
+  const x = value;
+  console.log(x);
+}
+```
+
+同理，普通的 `for...of` 也是普通迭代器 `next()` 的语法糖：
+
+```ts
+// 你写的
+for (const x of obj) { ... }
+
+// JS 底层大致做的
+const it = obj[Symbol.iterator]();
+while (true) {
+  const { value, done } = it.next();
+  if (done) break;
+  const x = value;
+  ...
+}
+```
+
+不过严格来说，`for...of` 不只是"简单语法糖"，JS 还会顺手处理一些额外细节，比如循环提前 `break` 时会调用迭代器的 `return()` 方法来做清理。但从理解核心机制的角度，把它记成"帮你写 `next()` 循环"就够了。
+
+### 22.8 为什么要有 `while (true)`
+
+因为这个流不是只产出一个值，而是要**持续不断地产出多个值**，直到流结束。
+
+如果没有这个循环，函数最多只能执行一轮逻辑、产出一个值就结束了。
+
+`while (true)` 的含义是：
+
+- **只要流还没结束，就一直尝试产出下一个值**
+- 有值就 `yield`
+- 没值但没结束，就 `await` 等待
+- 已结束，就 `return`
+
+所以这个循环不是"傻转圈"，而是"一个长期运行的取数循环"。每次外部调用 `next()` 时，函数会从上次 `yield` 暂停的地方恢复，继续执行到循环体的下一个 `yield` 或 `return`。
+
+### 22.9 把这段代码和 `next()` 对应起来
+
+回到原始代码：
+
+```ts
+async *[Symbol.asyncIterator](): AsyncIterator<T> {
+  while (true) {
+    if (this.queue.length > 0) {
+      yield this.queue.shift()!;
+    } else if (this.done) {
+      return;
+    } else {
+      const result = await new Promise<IteratorResult<T>>((resolve) => this.waiting.push(resolve));
+      if (result.done) return;
+      yield result.value;
+    }
+  }
+}
+```
+
+假设外面在 `for await (const event of stream)` 消费。每一次 `for await` 内部调用 `next()` 时：
+
+**第一次 `next()`**：
+- 进入函数，进入 `while (true)`
+- 假设队列里有值 → 执行 `yield this.queue.shift()!`
+- 暂停，返回 `{ value: 那个事件, done: false }`
+- 外面拿到这个事件，执行循环体
+
+**第二次 `next()`**：
+- 从上次 `yield` 后面继续
+- 回到 `while (true)` 下一轮
+- 假设队列空了、也没结束 → 进入 `else` 分支
+- 执行 `await new Promise(...)` → 暂停等待
+- 直到生产者 `push()` 唤醒它
+- 被唤醒后 `yield result.value`
+- 再次暂停，返回给外面
+
+**某一次 `next()`**：
+- 从上次 `yield` 后面继续
+- 回到 `while (true)` 下一轮
+- 发现 `this.done === true` 且队列空了 → `return`
+- 返回 `{ value: undefined, done: true }`
+- `for await...of` 收到 `done: true`，循环结束
+
+### 22.10 小结：6 个关键词一句话
+
+| 关键词 | 含义 |
+|--------|------|
+| `async *` | 异步生成器，可以 `await`，也可以 `yield` |
+| `[Symbol.asyncIterator]` | 告诉 JS "这个对象怎么异步迭代" |
+| `next()` | 消费者每次来要一个新值的方法，通常由 `for await...of` 自动调用 |
+| `yield` | 把一个值交给本次 `next()`，然后暂停函数，等下次 `next()` 再恢复 |
+| `return` | 结束迭代器，告诉消费者 `done: true` |
+| `while (true)` | 让生成器可以不断产出多个值，而不是只产出一次 |
