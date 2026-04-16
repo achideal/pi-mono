@@ -255,6 +255,26 @@ stream: StreamFunction<Api, StreamOptions>;
 
 > "这里的几个位置必须共享同一个具体 api。"
 
+### 3.3 "用同一个泛型变量把多个位置绑在一起"是什么模式
+
+这不是什么高级技巧，而是泛型存在的**核心理由之一**。最简单的例子就是 `identity` 函数：
+
+```typescript
+function identity<T>(x: T): T { return x; }
+```
+
+`T` 同时出现在参数和返回值两个位置，所以编译器知道：输入什么类型，输出就是什么类型。
+
+`ApiProvider` 做的事情完全一样，只是绑定的位置更多（`api` 字段、`stream` 参数、`streamSimple` 参数）。
+
+这种模式没有一个统一的官方名称，不同语境下的叫法不同：
+
+- **TypeScript / 前端社区**：常叫 **correlated types**（关联类型）或 **linked generics**
+- **类型论 / 函数式编程**：属于 **parametric polymorphism**（参数多态）的基本用法——"同一个类型变量出现在多个位置，迫使这些位置统一"
+- **设计模式角度**：根据具体场景，有时归入 **type-safe builder** 或 **phantom type** 的变体
+
+不管叫什么名字，核心思想只有一句话：**一个类型参数出现在多个位置时，这些位置被迫统一到同一个具体类型。**
+
 ---
 
 ## 4. 为什么 registry 不能直接保存精确泛型 provider
@@ -617,18 +637,19 @@ ApiStreamFunction
 
 ### 7.2 第二件事：补上运行时安全边界
 
-因为类型擦除后，编译器已经看不到：
+类型擦除后，包装函数的签名变成了 `(model: Model<Api>, ...) => ...`。
 
-- 这个 provider 原来只接 `"openai-completions"`
-- 那个 provider 原来只接 `"anthropic-messages"`
+这意味着 TypeScript **在调用这个包装函数时，不会检查 `model.api` 是否和 provider 匹配**——因为任何 `Model<Api>` 都能传进来，编译器认为这完全合法。
 
-所以 wrapper 在运行时重新检查一次：
+所以这里的运行时断言 **不是"双保险"（类型系统查一遍、运行时再查一遍），而是唯一的防线**：
 
 ```typescript
 if (model.api !== api) {
     throw new Error(`Mismatched api: ${model.api} expected ${api}`);
 }
 ```
+
+**它到底在防什么？** 正常调用路径是 `registry.get(model.api)`——用 model 自己的 api 字符串去 Map 里取 provider，取出来的天然就是匹配的。但如果有人写了 bug（比如拿错了 key、传错了 model），编译器不会报错，只有这行运行时检查能拦住。
 
 只有检查通过后，才会执行：
 
@@ -741,14 +762,11 @@ const provider = resolveApiProvider(model.api);
 return provider.stream(model, context, options as StreamOptions);
 ```
 
-虽然这里类型上拿到的是宽接口：
+这里用的是 `model.api` 去查表，所以**正常流程下取出来的 provider 一定是匹配的**——你拿 `"anthropic-messages"` 去查，取出来的就是 Anthropic 的 provider。
 
-```typescript
-provider.stream(model: Model<Api>, ...)
-```
+但 TypeScript 并不知道这一点。从类型系统的视角看，`provider.stream` 的签名是 `(model: Model<Api>, ...)`，而 `model` 也是 `Model<Api>`——两边都是宽泛的 `Api` 类型，编译器无法验证它们是否真的对应同一个具体 api。也就是说，**即使有人传了一个错误的 model 进来，编译器也不会报错**。
 
-但这个 `stream` 实际上是 wrapper。  
-于是最终仍然会做：
+所以 wrapper 里的运行时断言是最后一道防线：
 
 ```typescript
 if (model.api !== api) {
@@ -761,9 +779,9 @@ if (model.api !== api) {
 所以整条链可以概括成：
 
 ```text
-注册时：保留精确泛型
-入库时：擦除成统一形状
-调用时：靠 wrapper 做运行时核对
+注册时：泛型约束保证 api、stream、streamSimple 三者一致（编译期检查）
+入库时：擦除成统一形状，精确泛型信息丢失
+调用时：正常流程按 model.api 查表天然匹配，但编译器无法验证，靠 wrapper 的运行时断言兜底
 ```
 
 这三步缺一不可。
@@ -779,11 +797,50 @@ if (model.api !== api) {
 3. `ApiProvider<TApi, TOptions>` 用同一个 `TApi` 把 `api`、`stream`、`streamSimple` 绑在一起。
 4. registry 里要放的是异构 provider，所以必须转换成统一内部形状，不能直接保留每个 entry 自己的精确泛型。
 5. `ApiProviderInternal` 不是第二套业务协议，只是 registry 内部的擦除后表示。
-6. `wrapStream()` 的作用是：把窄函数包装成统一签名，并在运行时检查 `model.api` 是否匹配，补上类型擦除后的安全边界。
+6. `wrapStream()` 的作用是：把窄函数包装成统一签名，并在运行时检查 `model.api` 是否匹配。这个运行时检查不是"双保险"，而是类型擦除后**唯一的**安全边界。
 
 ---
 
-## 10. 和前一篇文档怎么分工
+## 10. FAQ：读完后常见的三个追问
+
+### Q1：注册时只是提供了一个函数对象，又没调用它，类型系统能约束什么？
+
+约束的不是函数的**运行时行为**，而是函数的**类型签名是否匹配**。
+
+当 `TApi` 被推断为 `"anthropic-messages"` 后，`ApiProvider` 要求 `stream` 的类型是：
+
+```typescript
+StreamFunction<"anthropic-messages", TOptions>
+// 即 (model: Model<"anthropic-messages">, ...) => ...
+```
+
+如果你传入的是一个签名为 `(model: Model<"openai-completions">, ...) => ...` 的函数，`Model<"openai-completions">` 和 `Model<"anthropic-messages">` 类型不兼容（因为 `api` 字段的字面量类型不同），TypeScript 会在编译期报错。
+
+所以它检查的是：**你提供的函数声称自己能处理什么类型的输入**，而不是它运行时实际会做什么。函数不需要被调用，签名本身就是一种契约，编译器可以静态验证这个契约是否和 `api` 字段一致。
+
+### Q2：存进 Map 的时候 api 和 stream 是匹配的，为什么取出来调用时还需要运行时检查？
+
+存的时候确实是匹配的，但问题出在**取出来之后**。
+
+正常调用路径是 `registry.get(model.api)`——用 model 自己的 api 去查 Map，取出来的 provider 天然就是匹配的。这条路径不会出错。
+
+但 TypeScript **无法在类型层面保证这一点**。从编译器视角看，`provider.stream` 的参数类型是 `Model<Api>`（宽泛的），传进来的 `model` 也是 `Model<Api>`（宽泛的）——两边都是 `Api` 这个大集合，编译器不知道它们是否对应同一个具体 api。所以如果有人写了 bug（比如拿错了 key、或者传错了 model），编译器完全不会报错。
+
+运行时断言就是在防这种情况。正常流程下它永远不会触发，但它作为兜底存在，确保即使有 bug 也能及早暴露。
+
+### Q3：`ApiProviderInternal` 用 `any` 行不行？
+
+技术上可以，但会过度擦除。
+
+用 `ApiProviderInternal`（签名是 `Model<Api>`, `StreamOptions`）：调用方仍然必须传一个合法的 `Model` 和合法的 `StreamOptions`，你不能传一个 `number` 或其他无关类型进去。
+
+用 `any`：调用方可以传任何东西，编译器完全不管，连"参数得是个 Model"这种最基本的结构检查都没了。
+
+所以 `ApiProviderInternal` 是一个**平衡点**——它擦除了"具体是哪个 api"的精确信息（因为 Map 需要统一 value 类型），但保留了"参数必须是 Model、Context、StreamOptions"的结构约束。**刚好擦除到能塞进 Map，但尽量不多擦。**
+
+---
+
+## 11. 和前一篇文档怎么分工
 
 如果你现在已经理解了这里的类型分层，再回看 [stream.ts / api-registry.ts / register-builtins.ts 三文件串讲](./stream-registry-lazy-loading.md)，会更容易把两篇文档拼起来：
 
