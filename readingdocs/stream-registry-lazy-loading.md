@@ -6,6 +6,10 @@
 - `packages/ai/src/api-registry.ts` — Provider 注册表
 - `packages/ai/src/providers/register-builtins.ts` — 内置 Provider 注册 + 懒加载
 
+配套阅读：
+
+- [ApiProvider / ApiProviderInternal 类型分层讲解](./api-provider-vs-api-provider-internal.md) — 如果你已经理解调用链，但还不明白为什么要有两层 provider 类型、为什么 `Map` 里要做泛型擦除、以及 `wrapStream` 到底在补什么安全边界，请继续读这篇。
+
 ---
 
 ## 目录
@@ -100,6 +104,13 @@ interface ApiProviderInternal {
 ```
 
 为什么需要两套？因为 Map 只能存一种类型。你不能把 `StreamFunction<"anthropic-messages", AnthropicOptions>` 和 `StreamFunction<"openai-responses", OpenAIResponsesOptions>` 放进同一个 Map 的 value 类型里。所以内部统一擦除为 `ApiStreamFunction`。
+
+如果你对这里还有两个疑问：
+
+1. 为什么同样都写 `Api`，却不代表"必须是同一个具体 api"？
+2. 为什么 `ApiProvider<"openai-completions">` 不能直接当成 `ApiProvider<Api>` 放进 registry？
+
+那么建议继续看配套文档：[ApiProvider / ApiProviderInternal 类型分层讲解](./api-provider-vs-api-provider-internal.md)。那篇会单独把 `Api` vs `TApi`、`Map<string, V>` 的限制、函数参数放宽为什么会变得不安全、以及 `wrapStream` 的运行时校验怎么补上这条安全边界，完整拆开讲。
 
 ### 2.3 wrapStream — 泛型擦除时的安全防线
 
