@@ -654,6 +654,7 @@ export class InteractiveMode {
 		while (true) {
 			const userInput = await this.getUserInput();
 			try {
+				fs.appendFileSync("/Users/mattmdfang/Developer/pi-mono/pi-mono/debug.log", `userInput: ${userInput}\n`);
 				await this.session.prompt(userInput);
 			} catch (error: unknown) {
 				const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
