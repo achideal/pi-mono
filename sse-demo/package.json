@@ -1,0 +1,15 @@
+{
+  "name": "sse-demo",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "server": "npx tsx src/server.ts",
+    "client": "npx tsx src/client.ts",
+    "openai-mock": "npx tsx src/openai-mock-server.ts",
+    "openai-client": "npx tsx src/openai-client.ts",
+    "raw-parse": "npx tsx src/raw-sse-parser.ts"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}
