@@ -8,7 +8,7 @@
 
 配套阅读：
 
-- [ApiProvider / ApiProviderInternal 类型分层讲解](./api-provider-vs-api-provider-internal.md) — 如果你已经理解调用链，但还不明白为什么要有两层 provider 类型、为什么 `Map` 里要做泛型擦除、以及 `wrapStream` 到底在补什么安全边界，请继续读这篇。
+- [ApiProvider / ApiProviderInternal 类型分层讲解](./[4月16日]ApiProvider类型分层讲解.md) — 如果你已经理解调用链，但还不明白为什么要有两层 provider 类型、为什么 `Map` 里要做泛型擦除、以及 `wrapStream` 到底在补什么安全边界，请继续读这篇。
 
 ---
 

@@ -1,6 +1,6 @@
 # ApiProvider / ApiProviderInternal 类型分层讲解
 
-这篇文档是 [stream.ts / api-registry.ts / register-builtins.ts 三文件串讲](./stream-registry-lazy-loading.md) 的配套阅读。
+这篇文档是 [stream.ts / api-registry.ts / register-builtins.ts 三文件串讲](./[4月15日]stream-registry三文件串讲与懒加载.md) 的配套阅读。
 
 前一篇更偏**文件关系、调用链、懒加载机制**；这一篇更偏**类型关系、泛型约束、类型擦除和运行时校验**。
 
