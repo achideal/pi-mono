@@ -1,4 +1,5 @@
 export * from "./ai/index.js";
+export * from "./cli/index.export.js";
 export * from "./config/index.js";
 export { AgentLoop } from "./core/agent-loop.js";
 export { createBranch, getBranchPath, listBranches, switchBranch } from "./core/branch.js";
