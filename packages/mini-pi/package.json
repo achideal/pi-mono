@@ -1,0 +1,24 @@
+{
+  "name": "@pi/mini-pi",
+  "version": "0.1.0",
+  "description": "Minimal AI agent with tool use and session management",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "mini-pi": "dist/cli/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "start": "node dist/cli/index.js",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@pi/tui": "workspace:*",
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.9",
+    "typescript": "^5.5.3"
+  }
+}
