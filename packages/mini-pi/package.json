@@ -1,0 +1,44 @@
+{
+	"name": "@mariozechner/mini-pi",
+	"version": "0.0.1",
+	"private": true,
+	"description": "Minimal teaching-grade coding agent. Mirrors pi-mono's layering (ai / agent / session / tools / web) to showcase Stateful Shell vs Stateless Core, IoC, DI, and event-driven architecture.",
+	"type": "module",
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"files": [
+		"dist",
+		"README.md"
+	],
+	"scripts": {
+		"clean": "shx rm -rf dist",
+		"build": "tsgo -p tsconfig.build.json && npm run build:web",
+		"build:web": "node scripts/build-web.mjs",
+		"dev": "tsgo -p tsconfig.build.json --watch --preserveWatchOutput",
+		"start": "node dist/web/server.js",
+		"test": "vitest --run"
+	},
+	"keywords": [
+		"teaching",
+		"agent",
+		"llm",
+		"architecture"
+	],
+	"author": "pi-mono",
+	"license": "MIT",
+	"engines": {
+		"node": ">=20.0.0"
+	},
+	"devDependencies": {
+		"@types/node": "^22.10.5",
+		"@types/react": "^18.3.12",
+		"@types/react-dom": "^18.3.1",
+		"esbuild": "^0.24.0",
+		"typescript": "^5.9.2",
+		"vitest": "^3.2.4"
+	},
+	"dependencies": {
+		"react": "^18.3.1",
+		"react-dom": "^18.3.1"
+	}
+}
