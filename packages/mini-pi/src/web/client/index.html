@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<title>mini-pi</title>
+	<style>
+		:root {
+			--bg: #0e1116;
+			--bg-alt: #161b22;
+			--fg: #e6edf3;
+			--fg-dim: #7d8590;
+			--border: #30363d;
+			--accent: #58a6ff;
+			--error: #f85149;
+			--user: #238636;
+			--assistant: #1f6feb;
+			--tool: #8957e5;
+		}
+		* { box-sizing: border-box; }
+		body {
+			margin: 0;
+			font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+			background: var(--bg); color: var(--fg);
+			height: 100vh; overflow: hidden;
+		}
+		#root { height: 100vh; }
+		.app { display: flex; height: 100vh; }
+		.sidebar {
+			width: 260px; background: var(--bg-alt); border-right: 1px solid var(--border);
+			display: flex; flex-direction: column; overflow: hidden;
+		}
+		.sidebar-header {
+			padding: 16px; border-bottom: 1px solid var(--border);
+			display: flex; align-items: center; justify-content: space-between;
+		}
+		.sidebar-header h1 { margin: 0; font-size: 18px; }
+		.sidebar-header button {
+			background: var(--accent); color: white; border: 0; padding: 6px 12px; border-radius: 4px;
+			cursor: pointer;
+		}
+		.session-list { list-style: none; padding: 0; margin: 0; overflow-y: auto; flex: 1; }
+		.session-list button {
+			width: 100%; text-align: left; background: transparent; color: var(--fg);
+			border: 0; border-bottom: 1px solid var(--border);
+			padding: 10px 16px; cursor: pointer; font-family: inherit;
+		}
+		.session-list button.active { background: rgba(88,166,255,0.1); }
+		.session-list button:hover { background: rgba(255,255,255,0.04); }
+		.sess-title {
+			font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+			margin-bottom: 4px;
+		}
+		.sess-meta { font-size: 11px; color: var(--fg-dim); }
+
+		.main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+		.empty { margin: auto; color: var(--fg-dim); }
+		.log {
+			flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px;
+		}
+		.msg { border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; }
+		.msg-role {
+			font-size: 11px; color: var(--fg-dim); text-transform: uppercase; margin-bottom: 6px;
+			letter-spacing: 0.5px;
+		}
+		.msg-user { border-color: var(--user); }
+		.msg-assistant { border-color: var(--assistant); }
+		.msg-tool { border-color: var(--tool); background: rgba(137,87,229,0.08); }
+		.msg-content {
+			margin: 0; white-space: pre-wrap; word-break: break-word; font-family: inherit;
+			font-size: 14px; line-height: 1.5;
+		}
+		.tool-call {
+			margin-top: 8px; padding: 6px 10px; background: rgba(137,87,229,0.15);
+			border-radius: 4px; font-size: 12px;
+		}
+		.tool-call-name { color: var(--tool); font-weight: bold; }
+		.tool-call-args {
+			margin: 4px 0 0 0; font-family: "SF Mono", monospace; font-size: 11px;
+			white-space: pre-wrap; word-break: break-word;
+		}
+		.loading { color: var(--fg-dim); font-style: italic; }
+		.error { color: var(--error); }
+
+		.info-bar {
+			padding: 4px 16px; background: var(--bg-alt); border-top: 1px solid var(--border);
+			font-size: 11px; color: var(--fg-dim); max-height: 80px; overflow-y: auto;
+		}
+		.info-line { padding: 2px 0; font-family: "SF Mono", monospace; }
+
+		.composer { display: flex; border-top: 1px solid var(--border); padding: 12px; gap: 8px; }
+		.composer textarea {
+			flex: 1; background: var(--bg-alt); color: var(--fg); border: 1px solid var(--border);
+			border-radius: 4px; padding: 10px; font-family: inherit; font-size: 14px;
+			resize: vertical; min-height: 54px; max-height: 200px;
+		}
+		.actions { display: flex; align-items: flex-end; }
+		.actions button {
+			background: var(--accent); color: white; border: 0; padding: 8px 16px; border-radius: 4px;
+			cursor: pointer; font-size: 14px;
+		}
+		.actions button:disabled { opacity: 0.5; cursor: not-allowed; }
+	</style>
+</head>
+<body>
+	<div id="root"></div>
+	<script type="module" src="/client.js"></script>
+</body>
+</html>
