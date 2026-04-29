@@ -32,8 +32,8 @@ export async function* parseSseStream(response: Response, signal?: AbortSignal):
 			if (done) break;
 
 			buffer += decoder.decode(value, { stream: true });
-			const lines = buffer.split("\n");
-			buffer = lines.pop() ?? ""; // 最后一行可能不完整，留到下一轮
+			const lines = buffer.split("\n"); //最后一行完整的话，lines的最后一个元素是空字符串''
+			buffer = lines.pop() ?? ""; // 拿到的最后一行非空字符串，则说明某行被截断了，要留到下一轮
 
 			for (const line of lines) {
 				const trimmed = line.trim();

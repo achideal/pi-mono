@@ -70,8 +70,7 @@ Tool-use policy:
 - Only call a tool when the user's request truly requires accessing the filesystem or running a command.
 - For conversational messages (greetings, chit-chat, general questions, explanations), reply with plain text and DO NOT call any tool.
 - Never invoke bash just to print or echo text.
-
-Keep replies concise.`;
+`;
 }
 
 const SYSTEM_PROMPT = buildSystemPrompt(CWD);

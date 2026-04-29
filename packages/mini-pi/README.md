@@ -60,7 +60,7 @@ mini-pi 不是"小号 pi"，而是 pi 的**架构 X 光片**。
 ```bash
 # 环境变量
 export MINI_PI_API_KEY=sk-...
-export MINI_PI_ BASE_URL=https://api.openai.com/v1  # 可选
+export MINI_PI_BASE_URL=https://api.openai.com/v1  # 可选
 export MINI_PI_PROVIDER=chat-completions           # 或 responses
 export MINI_PI_MODEL=gpt-4o-mini
 
