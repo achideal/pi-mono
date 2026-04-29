@@ -46,17 +46,35 @@ const BASE_URL = process.env.MINI_PI_BASE_URL;
 const MODEL = process.env.MINI_PI_MODEL ?? "gpt-4o-mini";
 const PROVIDER_KIND = (process.env.MINI_PI_PROVIDER ?? "chat-completions") as ProviderKind;
 
-const SYSTEM_PROMPT = `You are mini-pi, a minimal coding agent. You have access to three tools:
+// 固化在启动时确定的工作目录：后续所有会话共享同一个，写入 system prompt 让 LLM 知道。
+const CWD = process.cwd();
+
+function buildSystemPrompt(cwd: string): string {
+	return `You are mini-pi, a minimal coding agent. You have access to three tools:
 - read_file: read a local file
 - write_file: write (or overwrite) a local file
 - bash: execute a shell command
 
+Environment:
+- Current working directory: ${cwd}
+- Relative paths in any tool call are resolved against this directory.
+- Shell is /bin/sh; commands run with a 30s timeout and 100KB output cap.
+
+Exploration workflow:
+- To explore the project, use bash with standard commands (ls, find, tree, rg/grep, cat, head, wc ...).
+  Prefer targeted commands: "ls -la", "find . -maxdepth 2 -type f", "rg -l pattern", etc.
+- Avoid commands that will be enormous on large repos (e.g. unbounded "find ." or "ls -R").
+- When you already know a file path, use read_file directly — it returns the full content without shell quoting concerns.
+
 Tool-use policy:
-- Only call a tool when the user's request truly requires accessing the local filesystem or running a command.
+- Only call a tool when the user's request truly requires accessing the filesystem or running a command.
 - For conversational messages (greetings, chit-chat, general questions, explanations), reply with plain text and DO NOT call any tool.
-- Prefer the smallest necessary action; never invoke bash just to print or echo text.
+- Never invoke bash just to print or echo text.
 
 Keep replies concise.`;
+}
+
+const SYSTEM_PROMPT = buildSystemPrompt(CWD);
 
 if (!API_KEY) {
 	console.error("Set MINI_PI_API_KEY before starting mini-pi.");
@@ -265,6 +283,7 @@ server.listen(PORT, () => {
 	console.log(`  provider: ${PROVIDER_KIND}`);
 	console.log(`  model:    ${MODEL}`);
 	console.log(`  baseUrl:  ${BASE_URL ?? "(default: https://api.openai.com/v1)"}`);
+	console.log(`  cwd:      ${CWD}`);
 	console.log(`  sessions: ~/.mini-pi/sessions/`);
 });
 
