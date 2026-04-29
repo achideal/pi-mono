@@ -79,6 +79,15 @@ function applyServerEvent(state: ViewState, ev: ServerEvent): ViewState {
 			};
 			if (last?.streaming && e.message.role === "assistant") {
 				msgs[msgs.length - 1] = finalized;
+			} else if (
+				// 乐观 user 消息去重：如果刚乐观插入的 user 和 message_end 的 user 内容一致，
+				// 则替换本地占位而不是追加第二条。
+				e.message.role === "user" &&
+				last?.role === "user" &&
+				last.content === e.message.content &&
+				last.id.startsWith("local-")
+			) {
+				msgs[msgs.length - 1] = finalized;
 			} else {
 				msgs.push(finalized);
 			}
@@ -94,8 +103,19 @@ function applyServerEvent(state: ViewState, ev: ServerEvent): ViewState {
 		case "turn_start":
 		case "turn_end":
 			return state;
-		case "agent_end":
-			return { ...state, isRunning: false };
+		case "agent_end": {
+			const next = { ...state, isRunning: false };
+			if (e.reason === "error") {
+				return { ...next, error: e.error ?? "Agent stopped with an error" };
+			}
+			if (e.reason === "aborted") {
+				return { ...next, info: [...next.info, "Agent aborted"] };
+			}
+			if (e.reason === "max_turns") {
+				return { ...next, error: "Reached max turns without a final reply" };
+			}
+			return next;
+		}
 	}
 }
 
@@ -168,6 +188,7 @@ export function App() {
 			// 乐观：立刻展示 user message（最终 message_end 事件会再补一次，但 reduce 已做去重）
 			setView((prev) => ({
 				...prev,
+				error: undefined,
 				messages: [
 					...prev.messages,
 					{ id: `local-${Date.now()}`, role: "user", content: text },

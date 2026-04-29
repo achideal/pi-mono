@@ -95,6 +95,11 @@ async function getOrCreateRuntime(sessionId: string): Promise<SessionRuntime> {
 	const unsubBridge = agent.subscribe(async (event: AgentEvent) => {
 		hub.publish(sessionId, { kind: "agent", event });
 
+		// 服务端可观测性：出错时在终端打印
+		if (event.type === "agent_end" && event.reason === "error") {
+			console.error(`[session ${sessionId.slice(0, 8)}] agent_end error: ${event.error ?? "(no message)"}`);
+		}
+
 		// 压缩编排：agent_end 后检查
 		if (event.type === "agent_end" && event.reason === "stop") {
 			await maybeCompact(sessionId, agent, store);
@@ -253,6 +258,7 @@ server.listen(PORT, () => {
 	console.log(`mini-pi listening on http://localhost:${PORT}`);
 	console.log(`  provider: ${PROVIDER_KIND}`);
 	console.log(`  model:    ${MODEL}`);
+	console.log(`  baseUrl:  ${BASE_URL ?? "(default: https://api.openai.com/v1)"}`);
 	console.log(`  sessions: ~/.mini-pi/sessions/`);
 });
 
