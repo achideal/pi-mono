@@ -5,7 +5,7 @@
  * 整个项目**所有** `new` 和依赖装配都发生在这个文件。要查任何能力从哪来，看这里。
  *
  * 本文件职责：
- *  1. 读环境变量（OPENAI_API_KEY / OPENAI_BASE_URL / 模型 / provider）
+ *  1. 读环境变量（MINI_PI_API_KEY / MINI_PI_ BASE_URL / 模型 / provider）
  *  2. 装配 Agent + SessionStore + Compactor
  *  3. 开 HTTP server：
  *     - GET  /              静态首页 HTML
@@ -41,8 +41,8 @@ import { EventHub } from "./event-hub.js";
 // ============================================================
 
 const PORT = Number(process.env.MINI_PI_PORT ?? 5173);
-const API_KEY = process.env.OPENAI_API_KEY ?? "";
-const BASE_URL = process.env.OPENAI_BASE_URL;
+const API_KEY = process.env.MINI_PI_API_KEY ?? "";
+const BASE_URL = process.env.MINI_PI_BASE_URL;
 const MODEL = process.env.MINI_PI_MODEL ?? "gpt-4o-mini";
 const PROVIDER_KIND = (process.env.MINI_PI_PROVIDER ?? "chat-completions") as ProviderKind;
 
@@ -53,7 +53,7 @@ const SYSTEM_PROMPT = `You are mini-pi, a minimal coding agent. You have access 
 Use tools to accomplish user requests. Think briefly; prefer action. Keep replies concise.`;
 
 if (!API_KEY) {
-	console.error("Set OPENAI_API_KEY before starting mini-pi.");
+	console.error("Set MINI_PI_API_KEY before starting mini-pi.");
 	process.exit(1);
 }
 

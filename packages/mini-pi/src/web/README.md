@@ -120,7 +120,7 @@ await sendPrompt(...);
 
 ```bash
 cd packages/mini-pi
-export OPENAI_API_KEY=sk-...
+export MINI_PI_API_KEY=sk-...
 export MINI_PI_PROVIDER=chat-completions  # 或 responses
 export MINI_PI_MODEL=gpt-4o-mini
 npm install && npm run build
