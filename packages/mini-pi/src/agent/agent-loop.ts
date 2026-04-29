@@ -45,10 +45,11 @@ export async function runAgentLoop(
 	const newMessages: Message[] = [];
 	const workingMessages: Message[] = [...context.messages, ...newUserMessages];
 
-	// 把新的 user 消息先记账
+	// 把新的 user 消息先记账。
+	// 注意：user message 不是流式生成的，因此只发 message_end，不发 message_start。
+	// 语义约定：message_start 只标记"一个流式 assistant 输出即将开始"。
 	for (const m of newUserMessages) {
 		newMessages.push(m);
-		await emit({ type: "message_start" });
 		await emit({ type: "message_end", message: m });
 	}
 

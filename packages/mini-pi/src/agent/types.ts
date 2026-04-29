@@ -62,7 +62,14 @@ export interface AgentLoopConfig {
 // 3. AgentEvent — 内核发给外壳的事件
 // ============================================================
 
-/** 内核要通知外壳的事件类型。所有状态变更都必须走事件。 */
+/**
+ * 内核要通知外壳的事件类型。所有状态变更都必须走事件。
+ *
+ * 语义约定：
+ * - `message_start` 只标记"一个流式 assistant 输出即将开始"，之后会收到 text_delta / message_end(assistant)。
+ *   user / tool-result 消息不是流式生成的，它们**只发 message_end**，不发 message_start。
+ * - `message_end` 是"一条完整消息落地"的权威事件，外壳/UI/持久化都以此为准。
+ */
 export type AgentEvent =
 	| { type: "agent_start" }
 	| { type: "turn_start"; turn: number }
