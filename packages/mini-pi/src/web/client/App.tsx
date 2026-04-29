@@ -62,8 +62,17 @@ function applyServerEvent(state: ViewState, ev: ServerEvent): ViewState {
 		case "text_delta": {
 			const msgs = [...state.messages];
 			const last = msgs[msgs.length - 1];
-			if (last && last.streaming) {
+			if (last?.streaming) {
 				msgs[msgs.length - 1] = { ...last, content: last.content + e.text };
+			} else {
+				// 订阅起点在 message_start 之后（常见于刷新重连），
+				// 此时还没有 streaming 占位 —— lazy 补一个，让 text_delta 事件自包含。
+				msgs.push({
+					id: `streaming-${Date.now()}`,
+					role: "assistant",
+					content: e.text,
+					streaming: true,
+				});
 			}
 			return { ...state, messages: msgs };
 		}
